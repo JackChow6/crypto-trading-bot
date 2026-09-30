@@ -1,0 +1,54 @@
+# ===== 密钥与凭证（绝对不能提交）=====
+config.yaml
+config.local.yaml
+tg_session.session
+*.session
+*.key
+*.pem
+.env
+.env.*
+credentials*.json
+
+# ===== 运行时状态 / 交易记录 / 日志 =====
+v43/*.json
+v43/*.jsonl
+v43/*.log
+*.log
+*.err.log
+v43/live_state.json
+v43/paper_state.json
+v43/decision_log.jsonl
+v43/watchlist.json
+v43/backtest_*_cache.json
+v43/backtest_*_result.json
+
+# ===== 本地调试/临时脚本（不发布）=====
+_t.py
+_test_speed.py
+_review_test2.py
+_seed_trade.py
+_test_tg.py
+_analyze_losses.py
+_analyze_reverse.py
+bingx_test.py
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ===== 编辑器 / 系统 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

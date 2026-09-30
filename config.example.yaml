@@ -1,0 +1,161 @@
+# ============================================================
+# 加密货币永续合约交易引擎 —— 配置模板
+# 复制为 config.yaml 后填写。所有密钥请妥善保管，禁止提交到仓库。
+# ============================================================
+
+telegram:
+  api_id: 123456            # 从 https://my.telegram.org 申请
+  api_hash: "0123456789abcdef0123456789abcdef"
+  # 代理（国内访问 Telegram 必需；Clash 等默认 127.0.0.1:7897，可用 socks5/http）
+  proxy:
+    type: socks5
+    host: 127.0.0.1
+    port: 7897
+  session_file: "tg_session"
+  # 目标群：精确 id 或用户名，如 "-1001234567890" 或 "@SomeSignalChannel"
+  groups:
+    - "-1001234567890"
+  # 邀请链接：启动时自动用你的账号加入私密群（已加入则忽略）
+  invite_link: ""
+  only_senders: []          # 只接受这些发送者，空 = 接受群里所有人
+  report_chat: ""           # 把执行结果发到这个会话（如 "me" 表示发送给自己）
+
+exchange:
+  name: binance             # binance | bybit | okx | bitget | gateio ...
+  api_key: ""               # 交易所 API key（仅开交易权限，禁提现）
+  api_secret: ""            # 交易所 API secret
+  sandbox: true             # true = 测试网（强烈建议先用测试网验证）
+  default_type: swap        # swap = USDT本位永续合约；spot = 现货
+  proxy: "http://127.0.0.1:7897"   # 代理（币安直连被墙需走 Clash 代理）
+  margin_mode: cross        # cross(全仓) | isolated(逐仓)
+  usdt_per_trade: 5         # 每单名义金额(USDT)
+  max_usd_per_trade: 20
+  max_leverage: 20
+  allowed_symbols: []       # 白名单，如 ["BAT/USDT"]；空 = 全部
+  require_stop_loss: true
+  execution: market         # market(市价) | limit(限价)
+
+# ===== V4.3 引擎 =====
+engine:
+  symbol: "BAT/USDT:USDT"   # 监控的交易对
+  timeframe: "15m"          # 主周期
+  entry_timeframe: "5m"     # 入场中周期确认
+  fine_entry_timeframe: "1m"
+  sl_timeframe: "1h"        # 止损周期（动态止损用更高周期 ATR）
+  poll_interval: 60         # REST 轮询间隔(秒)
+  cooldown: 300             # 事件冷却(秒)
+  rest_rate_limit: 600      # 全局 REST 请求上限(次/分钟)，防币安 IP 封禁
+  rule_fallback: true       # 模型不可用时用确定性规则兜底
+  live: false               # ⚠️ true=实盘交易（需先填 api_key/api_secret 并充分回测）
+  state_history: 5
+  entry_trigger: both       # any | pullback | breakdown | breakout | both
+  signal_source: rule       # rule=确定性量化信号(趋势三共振) | ai=本地大模型判断
+  rule_signal:
+    trend_min_score: 4      # 趋势共振最低评分(满分5)
+  signal_filter_enabled: false
+  signal_filter:
+    delta_long_thr: -50000
+    macd_short_thr: 0.3
+  reverse: false            # 反向跟单：镜像信号方向（多↔空）
+  short_only: false
+  min_confidence: 70
+  sl_atr_mult: 1.2
+  tp_atr_mult: 2.5
+  min_sl_pct: 1.0
+  min_rr: 1.5
+  fixed_tp_usd: 2.0         # 固定止盈金额(USDT)
+  fixed_sl_usd: 3.0         # 固定止损金额(USDT)
+  dynamic_tp: false         # true=动态止盈（锁利+移动止损继续奔跑）
+  dynamic_sl: false         # true=止损按 ATR 浮动，false=固定金额
+  dyn_sl_atr_mult: 1.43
+  sl_min_usd: 0.37
+  sl_max_usd: 5.99
+  trail_step1_usd: 1.5
+  trail_step2_usd: 0.43
+  trail_step2_after_usd: 6.88
+  break_even_ratio: 1.0
+  roi_decay_enabled: false
+  roi_decay_mid_min: 45
+  roi_decay_mid_usd: 1.36
+  roi_decay_min_min: 438
+  roi_decay_min_usd: 0.14
+  sl_decay_enabled: false
+  sl_decay_mid_min: 234
+  sl_decay_mid_usd: 1.7
+  sl_decay_min_min: 260
+  sl_decay_min_usd: 0.94
+  confirm_timeout: 15
+  allow_average: false      # true=同方向合并加仓（加权平均摊成本）
+  max_averages: 0           # 单币最多加仓次数，0=不限
+  same_symbol_multi: false  # true=同一币独立多仓（不合并），持仓笔数不受限制
+  choch_exit_enabled: false
+  choch_timeframe: "4h"
+  choch_min_pnl_usd: 0.5
+  close_all_profit_usd: 0   # 总浮盈达此金额全平，0=禁用
+  stop_reverse_enabled: false  # 止损反手：止损后反向开单
+
+  stream:                   # WebSocket 实时流
+    throttle: 60
+    settle_interval: 30
+    proxy: ""
+
+  dashboard:                # Web 控制台
+    enabled: true
+    host: "127.0.0.1"
+    port: 8000
+
+  events:
+    volume_ratio_thr: 2.0
+    oi_change_thr: 2.0
+    funding_thr: 0.001
+
+  local_ai:                 # 本地模型（Ollama）
+    base_url: "http://127.0.0.1:11434/v1"
+    model: "qwen3:4b"
+    api_key: "ollama"
+    timeout: 120
+    num_ctx: 8192
+
+  risk:
+    initial_equity: 1000
+    position_pct: 0.5
+    risk_per_trade_pct: 1
+    max_position_usd: 5     # 每笔初始保证金(USDT)
+    leverage: 20
+    max_leverage: 20
+    max_open_positions: 0   # 同时最大持仓数：0=不限制
+    max_drawdown_pct: 20
+    max_daily_loss_pct: 10
+
+  trailing:
+    trail_atr_mult: 2.5
+    break_even_at: 2.0
+    profit_lock_pct: 1.0
+    trail_pct: 1.2
+    min_stop_pct: 1.0
+    kline_reversal: true
+    kline_reversal_min_pnl_pct: 1.0
+
+  ai_review: false
+  ai_review_interval_min: 1
+
+  gainers:                  # 动量信号源（python v43/engine.py --gainers）
+    signal_pool: momentum   # momentum=多周期平滑动量 | gainers=24h涨幅榜
+    top_n: 30
+    refresh_min: 5
+    min_quote_volume: 100000
+    pool_size: 80
+    max_gain_pct: 60
+    direction: both         # long | short | both
+
+  paper:                    # 模拟盘
+    initial_equity: 1000
+    slippage_pct: 0.05
+    fee_pct: 0.05
+    limit_timeout_sec: 600
+    entry_order_type: "market"
+    entry_limit_offset_pct: 0.3
+    entry_split_ratio: 0.5
+    entry_chase_enabled: false
+    entry_chase_range_pct: 1.0
+    entry_chase_min_step_pct: 0.05
