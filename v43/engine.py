@@ -474,6 +474,22 @@ class Engine:
             print(f"[engine] 拉取 {tf} K线失败 {sym}: {e}")
             return self.tf_cache.get(key, (0, []))[1]
 
+    def _ma99_4h_trend(self, sym: str):
+        """4h 周期 MA99 趋势（约 16 天大趋势）。
+
+        用 4h K 线算 99 根收盘均价，收盘价 > MA99 = LONG（多头趋势），< MA99 = SHORT（空头趋势）。
+        数据不足返回 None（让上层跳过 MA99 判断）。
+        """
+        try:
+            candles = self.fetch_candles(sym, "4h", limit=110)
+            if not candles or len(candles) < 99:
+                return None
+            closes = [c[4] for c in candles]
+            ma = sum(closes[-99:]) / 99
+            return "LONG" if closes[-1] > ma else "SHORT"
+        except Exception:
+            return None
+
     def _sl_atr(self, sym: str) -> float:
         """止损周期 ATR（多时间框架止损）。
 
@@ -760,10 +776,21 @@ class Engine:
             d.tp = None
             d.reason = f"已按信号方向纠正为 {sig_side}。{d.reason}"[:200]
 
-        # 反向跟单：镜像 AI 的方向（多↔空）。
-        # 止盈止损沿用「原始信号方向」的价位：原多单止盈价 = 现空单止损价、原多单止损价 = 现空单止盈价（距离互换）。
+        # 方向决策：
+        # 1) ma99_short_signal：窄信号模式——只做「共振做多 + 4h MA99空 → 反向做空」，其他一律不开单
+        # 2) reverse：无条件反向跟单（镜像信号方向）
         reversed_dir = False
-        if self.ecfg.get("reverse", False) and d.action in ("LONG", "SHORT"):
+        if self.ecfg.get("ma99_short_signal", False) and d.action in ("LONG", "SHORT"):
+            ma = self._ma99_4h_trend(snap.get("symbol") or self.symbol)
+            if d.action == "LONG" and ma == "SHORT":
+                # 共振做多 + 4h MA99空 → 反向做空
+                d.action = "SHORT"
+                reversed_dir = True
+                d.reason = f"[MA99空反空] {d.reason}"[:200]
+            else:
+                result["gate"] = "MA99_SHORT_FILTER"
+                return result
+        elif self.ecfg.get("reverse", False) and d.action in ("LONG", "SHORT"):
             d.action = "LONG" if d.action == "SHORT" else "SHORT"
             reversed_dir = True
             d.reason = f"[反向] {d.reason}"[:200]
