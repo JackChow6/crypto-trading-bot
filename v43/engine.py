@@ -490,6 +490,22 @@ class Engine:
         except Exception:
             return None
 
+    def _ma7_4h_trend(self, sym: str):
+        """4h 周期 MA7 趋势（约 28 小时中短期趋势）。
+
+        用 4h K 线算 7 根收盘均价，收盘价 > MA7 = LONG（多头趋势），< MA7 = SHORT（空头趋势）。
+        数据不足返回 None（让上层跳过 MA7 判断）。
+        """
+        try:
+            candles = self.fetch_candles(sym, "4h", limit=15)
+            if not candles or len(candles) < 7:
+                return None
+            closes = [c[4] for c in candles]
+            ma = sum(closes[-7:]) / 7
+            return "LONG" if closes[-1] > ma else "SHORT"
+        except Exception:
+            return None
+
     def _sl_atr(self, sym: str) -> float:
         """止损周期 ATR（多时间框架止损）。
 
@@ -777,22 +793,27 @@ class Engine:
             d.reason = f"已按信号方向纠正为 {sig_side}。{d.reason}"[:200]
 
         # 方向决策：
-        # 1) ma99_signal：MA99 定方向（仅对共振做多信号）——
-        #    「共振做多 + 4h MA99空 → 反向做空」「共振做多 + 4h MA99多 → 顺势做多」，
+        # 1) ma99_signal：MA7+MA99 双趋势定方向（仅对共振做多信号）——
+        #    「共振做多」时，要求 4h MA7 与 4h MA99 趋势一致才下单：
+        #      MA7空 + MA99空 → 反向做空；MA7多 + MA99多 → 顺势做多；两者不一致 → 不开单。
         #    共振做空信号一律不开单。
         # 2) reverse：无条件反向跟单（镜像信号方向）
         reversed_dir = False
         if self.ecfg.get("ma99_signal", False) and d.action in ("LONG", "SHORT"):
             ma = self._ma99_4h_trend(snap.get("symbol") or self.symbol)
-            if d.action == "LONG" and ma in ("SHORT", "LONG"):
-                # 共振做多：最终方向 = 4h MA99 方向（MA99空→做空、MA99多→做多）
-                if ma == "SHORT":
+            ma7 = self._ma7_4h_trend(snap.get("symbol") or self.symbol)
+            if d.action == "LONG" and ma in ("SHORT", "LONG") and ma7 in ("SHORT", "LONG"):
+                # 共振做多：MA7 与 MA99 双趋势一致才下单，最终方向 = 趋势方向
+                if ma == "SHORT" and ma7 == "SHORT":
                     d.action = "SHORT"
                     reversed_dir = True
-                    d.reason = f"[MA99空反空] {d.reason}"[:200]
-                else:
+                    d.reason = f"[MA7空+MA99空反空] {d.reason}"[:200]
+                elif ma == "LONG" and ma7 == "LONG":
                     d.action = "LONG"
-                    d.reason = f"[MA99多顺多] {d.reason}"[:200]
+                    d.reason = f"[MA7多+MA99多顺多] {d.reason}"[:200]
+                else:
+                    result["gate"] = "MA7_MA99_DIVERGE"
+                    return result
             else:
                 result["gate"] = "MA99_SIGNAL_FILTER"
                 return result
