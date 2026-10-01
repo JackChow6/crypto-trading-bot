@@ -364,12 +364,16 @@ class LiveTrader(papermod.PaperTrader):
                                         reversed=reversed)
                 self.positions.setdefault(symbol, []).append(pos)
                 self._save()
+                # 限价单立即成交后同样挂服务器端止盈止损（与市价入场一致，避免裸奔）
+                self._place_tp_sl(symbol, side, tp_adj, sl_adj, qty=qty,
+                                  place_tp=not getattr(self, "dynamic_tp", False))
                 print(f"[live] 限价单立即成交 {symbol} {side} @ {fill:.8g}")
                 return pos
             self.pending_entries[symbol] = {
                 "order_id": order.get("id"), "side": side, "entry": entry,
                 "size_usd": size_usd, "leverage": leverage, "sl": sl, "tp": tp,
                 "created_at": time.time(), "reversed": reversed,
+                "limit_price": limit_price, "add": False,
             }
             self._save()
             print(f"[live] 限价挂单 {symbol} {side} @ {limit_price}，等待回踩成交")
@@ -526,14 +530,17 @@ class LiveTrader(papermod.PaperTrader):
                                     reversed=bool(meta.get("reversed", False)))
             self.positions.setdefault(symbol, []).append(pos)
             self._save()
+            # 限价单成交开仓后同样挂服务器端止盈止损（避免裸奔）
+            self._place_tp_sl(symbol, side, tp_adj, sl_adj,
+                              place_tp=not getattr(self, "dynamic_tp", False))
             print(f"[live] 限价单成交开仓 {symbol} {side} @ {fill:.8g}")
             return pos
         if status in ("canceled", "expired"):
             del self.pending_entries[symbol]
             self._save()
             return "CANCELLED"
-        # 挂单中：追踪建仓——价格朝有利方向走则撤旧单、追挂更优价
-        if status == "open" and meta.get("add") and self.cfg.get("entry_chase_enabled", False):
+        # 挂单中：追踪建仓——价格朝有利方向走则撤旧单、追挂更优价（纯限价单也支持）
+        if status == "open" and self.cfg.get("entry_chase_enabled", False):
             self._chase_limit(symbol, meta, bids, asks)
             order_id = meta["order_id"]   # 追价后可能换了新单 id
         timeout = float(self.cfg.get("limit_timeout_sec", 600))

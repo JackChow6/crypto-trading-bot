@@ -777,18 +777,24 @@ class Engine:
             d.reason = f"已按信号方向纠正为 {sig_side}。{d.reason}"[:200]
 
         # 方向决策：
-        # 1) ma99_short_signal：窄信号模式——只做「共振做多 + 4h MA99空 → 反向做空」，其他一律不开单
+        # 1) ma99_signal：MA99 定方向（仅对共振做多信号）——
+        #    「共振做多 + 4h MA99空 → 反向做空」「共振做多 + 4h MA99多 → 顺势做多」，
+        #    共振做空信号一律不开单。
         # 2) reverse：无条件反向跟单（镜像信号方向）
         reversed_dir = False
-        if self.ecfg.get("ma99_short_signal", False) and d.action in ("LONG", "SHORT"):
+        if self.ecfg.get("ma99_signal", False) and d.action in ("LONG", "SHORT"):
             ma = self._ma99_4h_trend(snap.get("symbol") or self.symbol)
-            if d.action == "LONG" and ma == "SHORT":
-                # 共振做多 + 4h MA99空 → 反向做空
-                d.action = "SHORT"
-                reversed_dir = True
-                d.reason = f"[MA99空反空] {d.reason}"[:200]
+            if d.action == "LONG" and ma in ("SHORT", "LONG"):
+                # 共振做多：最终方向 = 4h MA99 方向（MA99空→做空、MA99多→做多）
+                if ma == "SHORT":
+                    d.action = "SHORT"
+                    reversed_dir = True
+                    d.reason = f"[MA99空反空] {d.reason}"[:200]
+                else:
+                    d.action = "LONG"
+                    d.reason = f"[MA99多顺多] {d.reason}"[:200]
             else:
-                result["gate"] = "MA99_SHORT_FILTER"
+                result["gate"] = "MA99_SIGNAL_FILTER"
                 return result
         elif self.ecfg.get("reverse", False) and d.action in ("LONG", "SHORT"):
             d.action = "LONG" if d.action == "SHORT" else "SHORT"
